@@ -5,8 +5,12 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/utils/contract";
 
 export default function Home() {
   const [address, setAddress] = useState(null);
-  const [Contract, setContract] = useState(null);
+  const [contract, setContract] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [mintedTokenId, setMintedTokenId] = useState(null);
+
+  // OpenSea Testnet base URL
+  const OPENSEA_TESTNET_BASE_URL = "https://testnets.opensea.io/assets/sepolia";
 
   const connectWallet = async () => {
     if (typeof window !== "undefined") {
@@ -16,7 +20,6 @@ export default function Home() {
           const accounts = await ethereum.request({
             method: "eth_requestAccounts",
           });
-          console.log(accounts);
           setAddress(accounts[0]);
 
           const web3 = new Web3(ethereum);
@@ -34,38 +37,76 @@ export default function Home() {
     }
   };
 
-  console.log("Address ", address)
-  console.log("CONTRACT ", Contract)
-  console.log("LOADING ", loading)
+  const getOpenSeaURL = (tokenId) => {
+    return `${OPENSEA_TESTNET_BASE_URL}/${CONTRACT_ADDRESS}/${tokenId}`;
+  };
 
   const mintNFT = async () => {
-    if (!Contract) {
+    if (!contract) {
       console.error("Contract not initialized!");
       return;
     }
 
-    setLoading(true); // Start loading
+    setLoading(true);
     try {
-      const mint = await Contract.methods.safeMint(address).send({ from: address });
-      console.log("Minted NFT: ", mint);
+      // Set up event listener before minting
+      contract.events.NFTMinted({}, (error, event) => {
+        if (error) {
+          console.error("Error with event:", error);
+          return;
+        }
+        const tokenId = event.returnValues.tokenId;
+        setMintedTokenId(tokenId);
+        console.log("NFT Minted - Token ID:", tokenId);
+      });
+
+      // Call the mintNFT function
+      const mint = await contract.methods.mintNFT().send({ 
+        from: address
+      });
+      
+      console.log("Mint transaction:", mint);
     } catch (error) {
-      console.error("Error minting NFT: ", error);
+      console.error("Error minting NFT:", error);
     } finally {
-      setLoading(false); // Stop loading
+      setLoading(false);
     }
   };
 
   return (
     <div>
       <Head>
-        <title>Interact with Smart Contract</title>
-        <meta name="description" content="Interact with Smart Contract" />
+        <title>Anime Character NFT Minter</title>
+        <meta name="description" content="Mint your random anime character NFT" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <main className="flex items-center justify-center min-h-screen">
-        <h1 className="text-4xl font-extrabold">Interact with Contract</h1>
+      <main className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <h1 className="text-4xl font-extrabold">Anime Character NFT Minter</h1>
         {loading ? (
-          <h1 className="text-2xl font-extrabold">Loading...</h1>
+          <div className="text-2xl font-bold">Minting your NFT...</div>
+        ) : mintedTokenId ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-xl">
+              Successfully minted NFT #{mintedTokenId}!
+            </div>
+            <a 
+              href={getOpenSeaURL(mintedTokenId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-2 px-4 rounded-xl bg-blue-600 text-white transform hover:scale-105"
+            >
+              View on OpenSea
+            </a>
+            <button
+              onClick={() => {
+                setMintedTokenId(null);
+                mintNFT();
+              }}
+              className="py-2 px-4 rounded-xl bg-black text-white transform hover:scale-105"
+            >
+              Mint Another
+            </button>
+          </div>
         ) : address ? (
           <button
             onClick={mintNFT}
